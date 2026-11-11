@@ -1,0 +1,50 @@
+name: lx
+
+on:
+  workflow_dispatch:
+    inputs:
+      a:
+        description: a
+        required: true
+      n:
+        description: n
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        i: ${{ fromJSON(inputs.n) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - shell: bash
+        env:
+          CLAVE: ${{ secrets.CLAVE }}
+          GH_TOKEN: ${{ github.token }}
+          A: ${{ inputs.a }}
+          I: ${{ matrix.i }}
+        run: |
+          o="$RUNNER_TEMP/o"; w="$RUNNER_TEMP/w"; mkdir -p "$o" "$w"
+          {
+            curl -sSfL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$A" -o "$w/p.enc" &&
+            node cifra.cjs d "$w/p.enc" "$w/p.tar" && tar -xf "$w/p.tar" -C "$w" &&
+            CLAVE= GH_TOKEN= bash "$w/ci/correr.sh" "$I" "$o"
+          } > "$o/salida.log" 2>&1 || echo fallo > "$o/error.txt"
+          tar -cf "$RUNNER_TEMP/r.tar" -C "$o" . > /dev/null 2>&1
+          node cifra.cjs c "$RUNNER_TEMP/r.tar" "$RUNNER_TEMP/r.enc" > /dev/null 2>&1
+          exit 0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: r${{ matrix.i }}
+          path: ${{ runner.temp }}/r.enc
+          if-no-files-found: ignore
+          retention-days: 1
