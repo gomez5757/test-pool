@@ -1,0 +1,59 @@
+name: run
+
+on:
+  workflow_dispatch:
+    inputs:
+      a:
+        description: a
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  t:
+    runs-on: windows-latest
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix:
+        i: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22.23.2'
+      - shell: pwsh
+        run: |
+          $n = Join-Path $env:RUNNER_TEMP 'node22.exe'
+          Copy-Item -LiteralPath (node -p 'process.execPath') -Destination $n
+          "DIANAPLUS_TEST_NODE22=$n" >> $env:GITHUB_ENV
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '24.14.1'
+      - shell: pwsh
+        env:
+          CLAVE: ${{ secrets.CLAVE }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $o = Join-Path $env:RUNNER_TEMP 'o'
+          $w = Join-Path $env:RUNNER_TEMP 'w'
+          New-Item -ItemType Directory -Path $o, $w | Out-Null
+          try {
+            Invoke-WebRequest -Uri "https://api.github.com/repos/${{ github.repository }}/releases/assets/${{ inputs.a }}" -Headers @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/octet-stream' } -OutFile "$w\p.enc" *> $null
+            node cifra.cjs d "$w\p.enc" "$w\p.tar" *> $null
+            tar -xf "$w\p.tar" -C $w *> $null
+            & pwsh -NoProfile -File "$w\ci\correr.ps1" ${{ matrix.i }} $o *> "$o\salida.log"
+          } catch { "$_" | Out-File "$o\error.txt" }
+          tar -cf "$env:RUNNER_TEMP\r.tar" -C $o . *> $null
+          node cifra.cjs c "$env:RUNNER_TEMP\r.tar" "$env:RUNNER_TEMP\r.enc" *> $null
+          exit 0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: r${{ matrix.i }}
+          path: ${{ runner.temp }}/r.enc
+          if-no-files-found: ignore
+          retention-days: 1
