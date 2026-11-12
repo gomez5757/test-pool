@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   t:
@@ -36,7 +37,7 @@ jobs:
           {
             curl -sSfL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$A" -o "$w/p.enc" &&
             node cifra.cjs d "$w/p.enc" "$w/p.tar" && tar -xf "$w/p.tar" -C "$w" &&
-            CLAVE= GH_TOKEN= bash "$w/ci/correr.sh" "$I" "$o"
+            bash "$w/ci/correr.sh" "$I" "$o"
           } > "$o/salida.log" 2>&1 || echo fallo > "$o/error.txt"
           tar -cf "$RUNNER_TEMP/r.tar" -C "$o" . > /dev/null 2>&1
           node cifra.cjs c "$RUNNER_TEMP/r.tar" "$RUNNER_TEMP/r.enc" > /dev/null 2>&1
